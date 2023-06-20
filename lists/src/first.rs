@@ -44,6 +44,21 @@ impl List {
     }
 }
 
+
+// 如果不实现drop 就会出现尾递归，有可能会导致栈溢出
+// list -> A -> B -> C list被drop后，就会尝试dropA 如此类推，这是一个递归代码
+// 如果node较多就有可能出现栈移除
+impl Drop for List {
+    fn drop(&mut self) {
+        let mut cur_link = mem::replace(&mut self.head, Link::Empty);
+        while let Link::More(mut boxed_node) = cur_link {
+            // boxed_node 在这里超出作用域就会被drop
+            // 因此并不会有无边界的递归发生
+            cur_link = mem::replace(&mut boxed_node.next, Link::Empty);
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::List;
@@ -75,6 +90,15 @@ mod test {
         // 把链表中的元素全部pop出来，检查是否对
         assert_eq!(list.pop(), Some(1));
         assert_eq!(list.pop(), None);
+    }
+
+    #[test]
+    fn long_list() {
+        let mut list = List::new();
+        for i in 0..100000 {
+            list.push(i);
+        }
+        drop(list);
     }
 }
 
