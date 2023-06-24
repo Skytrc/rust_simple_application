@@ -12,6 +12,17 @@ struct Node<T> {
     next: Link<T>,
 }
 
+// 通过Iterator特征来实现迭代，IntoIter只是简单取走值，不涉及引用和生命周期
+pub struct IntoIter<T>(List<T>);
+
+pub struct Iter<'a, T> {
+    next: Option<&'a Node<T>>,
+}
+
+pub struct IterMut<'a, T> {
+    next: Option<&'a mut Node<T>>,
+}
+
 // 这里前边的 T 表示声明泛型类型，后边的 T 代表了具体的某一个类型。
 impl<T> List<T> {
     pub fn new() -> Self {
@@ -49,7 +60,58 @@ impl<T> List<T> {
             &mut node.elem
         })
     }
+
+    // 迭代器
+
+    pub fn into_iter(self) -> IntoIter<T> {
+        IntoIter(self)
+    }
+
+    pub fn iter<'a>(&'a self) -> Iter<'a, T> {
+        Iter {
+            next: self.head.as_deref(),
+        }
+    }
+
+    pub fn iter_mut<'a>(&'a mut self) -> IterMut<'a, T> {
+        IterMut {
+            next: self.head.as_deref_mut(),
+        }
+    }
 }
+
+impl<T> Iterator for IntoIter<T> {
+    type Item = T;
+    fn next(&mut self) -> Option<Self::Item> {
+        // 直接转移了所有权，所以不涉及到生命周期
+        self.0.pop()
+    }
+}
+
+impl<'a, T> Iterator for Iter<'a, T> {
+    type Item = &'a T;
+    
+    fn next(&mut self) -> Option<Self::Item> {
+        self.next.map(|node| {
+            self.next = node.next.as_deref();
+            // 因为返回的是node.elem的引用，所以需要标注生命周期
+            &node.elem
+        })
+    }
+}
+
+impl<'a, T> Iterator for IterMut<'a, T> {
+    type Item = &'a mut T;
+    // Option 和不可变引用 &T 恰恰是可以 Copy 的
+    // 而可变引用 &mut T 不可以，所以使用 take来处理这种情况
+    fn next(&mut self) -> Option<Self::Item> {
+        self.next.take().map(|node| {
+            self.next = node.next.as_deref_mut();
+            &mut node.elem
+        })
+    }
+}
+
 
 impl<T> Drop for List<T> {
     fn drop(&mut self) {
@@ -116,6 +178,7 @@ mod test {
         assert_eq!(list.pop(), Some(42));
     }
 
+    // 测试正常drop，不会导致栈溢出
     #[test]
     fn long_list() {
         let mut list = List::new();
@@ -123,5 +186,42 @@ mod test {
             list.push(i);
         }
         drop(list);
+    }
+
+    #[test]
+    fn into_iter() {
+        let mut list = List::new();
+        list.push(1);
+        list.push(2);
+        list.push(3);
+
+        let mut iter = list.into_iter();
+        assert_eq!(iter.next(), Some(3));
+        assert_eq!(iter.next(), Some(2));
+        assert_eq!(iter.next(), Some(1));
+        assert_eq!(iter.next(), None);
+    }
+
+    
+    #[test]
+    fn iter() {
+        let mut list = List::new();
+        list.push(1); list.push(2); list.push(3);
+
+        let mut iter = list.iter();
+        assert_eq!(iter.next(), Some(&3));
+        assert_eq!(iter.next(), Some(&2));
+        assert_eq!(iter.next(), Some(&1));
+    }
+
+    #[test]
+    fn iter_mut() {
+        let mut list = List::new();
+        list.push(1); list.push(2); list.push(3);
+
+        let mut iter = list.iter_mut();
+        assert_eq!(iter.next(), Some(&mut 3));
+        assert_eq!(iter.next(), Some(&mut 2));
+        assert_eq!(iter.next(), Some(&mut 1));
     }
 }
