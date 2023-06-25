@@ -71,6 +71,7 @@ impl<T> Iterator for IntoIter<T> {
     type Item = T;
     fn next(&mut self) -> Option<Self::Item> {
         self.0.head.take().and_then(|rc_node| {
+            // Rc::try_unwrap 判断是否只有一个强引用
             if let Ok(mut node) = Rc::try_unwrap(rc_node) {
                 self.0.head = node.next.take();
                 Some(node.elem)
@@ -100,6 +101,20 @@ impl <'a, T> Iterator for IterMut<'a, T> {
             }
             Some(&mut node.elem)
         })
+    }
+}
+
+impl<T> Drop for List<T> {
+    fn drop(&mut self) {
+        let mut head = self.head.take();
+        while let Some(node) = head {
+            // 如果当前节点仅被当前链表引用 drop
+            if let Ok(mut node) = Rc::try_unwrap(node) {
+                head = node.next.take();
+            } else {
+                break;
+            }
+        }
     }
 }
 
