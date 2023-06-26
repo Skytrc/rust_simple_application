@@ -70,6 +70,8 @@ impl<T> List<T> {
     }
 
     pub fn peek_front(&self) -> Option<Ref<T>> {
+        // Ref和内部引用的生命周期不再和RefCell相同
+        // 用map()返回了新的ref和它的内部引用，所以他们的生命周期是相同的
         self.head.as_ref().map(|node| {
             Ref::map(node.borrow(), |node| &node.elem)
         })
