@@ -5,7 +5,7 @@ pub struct List<T> {
     tail: *mut Node<T>,
 }
 
-type Link<T> = Option<Box<Node<T>>>;
+type Link<T> = *mut Node<T>;
 
 struct Node<T> {
     elem: T,
@@ -15,7 +15,7 @@ struct Node<T> {
 impl<T> List<T> {
     pub fn new() -> Self {
         List {
-            head: None,
+            head: ptr::null_mut(),
             tail: ptr::null_mut()
         }
     }
