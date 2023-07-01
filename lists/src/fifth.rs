@@ -21,37 +21,45 @@ impl<T> List<T> {
     }
 
     pub fn push(&mut self, elem: T) {
-        let mut new_tail = Box::new(Node {
-            elem: elem,
-            next: None,
-        });
+        unsafe {
+            // into_raw 消费掉 Box (拿走所有权)，返回一个裸指针
+            let new_tail = Box::into_raw(Box::new(Node {
+                elem: elem,
+                next: ptr::null_mut(),
+            }));
 
-        // 创建原生指针是安全行为
-        let raw_tail: *mut _ = &mut *new_tail;
-
-        if !self.tail.is_null() {
-            // 解引用原生指针才是不安全行为
-            unsafe {
-                (*self.tail).next = Some(new_tail);
+            if !self.tail.is_null() {
+                // 解引用原生指针才是不安全行为
+                (*self.tail).next = new_tail;
+            } else {
+                self.head = new_tail;
             }
-        } else {
-            self.head = Some(new_tail);
+    
+            self.tail = new_tail;
         }
-
-        self.tail = raw_tail;
     }
 
     pub fn pop(&mut self) -> Option<T> {
-        self.head.take().map(|head| {
-            let head = *head;
-            self.head = head.next;
+        unsafe {
+            if self.head.is_null() {
+                None
+            } else {
+                let head = Box::from_raw(self.head);
+                self.head = head.next;
 
-            if self.head.is_none() {
-                self.tail = ptr::null_mut();
+                if self.head.is_null() {
+                    self.tail = ptr::null_mut();
+                }
+
+                Some(head.elem)
             }
+        }
+    }
+}
 
-            head.elem
-        })
+impl<T> Drop for List<T> {
+    fn drop(&mut self) {
+        while let Some(_) =  self.pop() { }
     }
 }
 
