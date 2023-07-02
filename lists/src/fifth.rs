@@ -55,6 +55,22 @@ impl<T> List<T> {
             }
         }
     }
+
+    pub fn peek(&self) -> Option<&T> {
+        if !self.head.is_null() {
+            Some(unsafe { &(*self.head).elem })
+        } else {
+            None
+        }
+    }
+
+    pub fn peek_mut(&self) -> Option<&mut T> {
+        if !self.head.is_null() {
+            Some(unsafe { &mut (*self.head).elem })
+        } else {
+            None
+        }
+    }
 }
 
 impl<T> Drop for List<T> {
