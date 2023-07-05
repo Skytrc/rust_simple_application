@@ -15,3 +15,14 @@ struct Node<T> {
     back: Link<T>,
     elem: T,
 }
+
+impl<T> LinkedList<T> {
+    pub fn new() -> Self {
+        Self {
+            front: None,
+            back: None,
+            len: 0,
+            _boo: PhantomData,
+        }
+    }
+}
