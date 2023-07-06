@@ -40,9 +40,6 @@ impl<T> LinkedList<T> {
                 (*new.as_ptr()).back = Some(old);
             } else {
                 // 如果链表为空，链表尾也为新的node
-                debug_assert!(self.back.is_none());
-                debug_assert!(self.front.is_none());
-                debug_assert!(self.len == 0);
                 self.back = Some(new);
             }
             // 设置新的链表头
@@ -64,18 +61,63 @@ impl<T> LinkedList<T> {
                     (*new.as_ptr()).front = None;
                 } else {
                     // 如果链表中没有其他node，链表尾也为None
-                    debug_assert!(self.len == 1);
                     self.back = None;
                 }
 
                 self.len -= 1;
                 result
+                // 当box中的 T 所有权转移了，box就会在这里被释放
             })
         }
     }
 
     pub fn len(&self) -> usize {
         self.len
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::LinkedList;
+
+    #[test]
+    fn test_basic_front() {
+        let mut list = LinkedList::new();
+
+        // Try to break an empty list
+        assert_eq!(list.len(), 0);
+        assert_eq!(list.pop_front(), None);
+        assert_eq!(list.len(), 0);
+
+        // Try to break a one item list
+        list.push_front(10);
+        assert_eq!(list.len(), 1);
+        assert_eq!(list.pop_front(), Some(10));
+        assert_eq!(list.len(), 0);
+        assert_eq!(list.pop_front(), None);
+        assert_eq!(list.len(), 0);
+
+        // Mess around
+        list.push_front(10);
+        assert_eq!(list.len(), 1);
+        list.push_front(20);
+        assert_eq!(list.len(), 2);
+        list.push_front(30);
+        assert_eq!(list.len(), 3);
+        assert_eq!(list.pop_front(), Some(30));
+        assert_eq!(list.len(), 2);
+        list.push_front(40);
+        assert_eq!(list.len(), 3);
+        assert_eq!(list.pop_front(), Some(40));
+        assert_eq!(list.len(), 2);
+        assert_eq!(list.pop_front(), Some(20));
+        assert_eq!(list.len(), 1);
+        assert_eq!(list.pop_front(), Some(10));
+        assert_eq!(list.len(), 0);
+        assert_eq!(list.pop_front(), None);
+        assert_eq!(list.len(), 0);
+        assert_eq!(list.pop_front(), None);
+        assert_eq!(list.len(), 0);
     }
 }
 
