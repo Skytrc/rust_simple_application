@@ -39,7 +39,11 @@ pub struct IntoIter<T> {
     list: LinkedList<T>,
 }
 
-
+pub struct CursorMut<'a, T> {
+    cur: Link<T>,
+    list: &'a mut LinkedList<T>,
+    index: Option<usize>,
+}
 
 impl<T> LinkedList<T> {
     pub fn new() -> Self {
@@ -196,6 +200,15 @@ impl<T> LinkedList<T> {
     pub fn into_iter(self) -> IntoIter<T> {
         IntoIter {
             list: self
+        }
+    }
+
+    // cursor
+    pub fn cursor_mut(&mut self) -> CursorMut<T> {
+        CursorMut {
+            cur: None,
+            list: self,
+            index: None,
         }
     }
 }
@@ -416,6 +429,178 @@ impl<T> ExactSizeIterator for IntoIter<T> {
     fn len(&self) -> usize {
         self.list.len
     }
+}
+
+// implement send and sync trait
+unsafe impl<T: Send> Send for LinkedList<T> {}
+unsafe impl<T: Sync> Sync for LinkedList<T> {}
+
+unsafe impl<'a, T: Send> Send for Iter<'a, T> {}
+unsafe impl<'a, T: Sync> Sync for Iter<'a, T> {}
+
+unsafe impl<'a, T: Send> Send for IterMut<'a, T> {}
+unsafe impl<'a, T: Sync> Sync for IterMut<'a, T> {}
+
+// cursor类似迭代器，但是可以自用的前后移动，cursorMut在自由移动的同时，可以修改链表
+impl<'a, T> CursorMut<'a, T>  {
+    // 返回当前索引
+    pub fn index(&self) -> Option<usize> {
+        self.index
+    }
+
+    // cur 向后移动操作
+    pub fn move_next(&mut self) {
+        if let Some(cur) = self.cur {
+            // 如果下个Node存在更改index，如果下个Index不存在，index置为None
+            unsafe {
+                self.cur = (*cur.as_ptr()).back;
+                if self.cur.is_some() {
+                    *self.index.as_mut().unwrap() += 1;
+                } else {
+                    self.index = None;
+                }
+            }
+            // 如果下个node为空且，链表为部位空，重置cur和index
+        } else if !self.list.is_empty() {
+            self.cur = self.list.front;
+            self.index = Some(0)
+        } else {
+            
+        }
+    }
+
+    // move_next的镜像操作
+    pub fn move_prev(&mut self) {
+        if let Some(cur) = self.cur {
+            unsafe {
+                self.cur = (*cur.as_ptr()).front;
+                if self.cur.is_some() {
+                    *self.index.as_mut().unwrap() -= 1;
+                } else {
+                    self.index = None;
+                }
+            }
+        } else if !self.list.is_empty() {
+            self.cur = self.list.back;
+            self.index = Some(self.list.len() - 1)
+        } else {
+            
+        }
+    }
+
+    pub fn current(&self) -> Option<&T> {
+        unsafe {
+            self.cur.map(|node| &(*node.as_ptr()).elem)
+        }
+    }
+
+    // 获取下一个元素
+    pub fn peek_next(&mut self) -> Option<&mut T> {
+        unsafe {
+            self.cur
+                .and_then(|node| (*node.as_ptr()).back.as_mut())
+                .map(|node| &mut (*node.as_ptr()).elem)
+        }
+    }
+
+    // peek_next镜像操作
+    pub fn peek_prev(&mut self) -> Option<&mut T> {
+        unsafe {
+            self.cur
+                .and_then(|node| (*node.as_ptr()).front.as_mut())
+                .map(|Node| &mut (*Node.as_ptr()).elem)
+        }
+    }
+
+    /// 实现切割
+    
+    // 以当前光标作为前链表的front，前一个节点为后链表的back，返回前链表
+    pub fn split_before(&mut self) -> LinkedList<T> {
+        if let Some(cur) = self.cur {
+            unsafe {
+                // 保存当前光标状态
+                let old_len = self.list.len;
+                let old_idx = self.index.unwrap();
+                let prev = (*cur.as_ptr()).front;
+
+                // 新的链表
+                let new_len = old_len - old_idx;
+                let new_front = self.cur;
+                let new_back = self.list.back;
+                let new_idx = Some(0);
+
+                // 输出链表的基本信息
+                let output_len = old_len - new_len;
+                let output_front = self.list.front;
+                let output_back = prev;
+                
+                // 将链表切割，两边的头尾节点都需要重新赋值
+                if let Some(prev) = prev {
+                    (*cur.as_ptr()).front = None;
+                    (*prev.as_ptr()).back = None;
+                }
+
+                self.list.len = new_len;
+                self.list.front = new_front;
+                self.list.back = new_back;
+                self.index = new_idx;
+
+                LinkedList {
+                    front: output_front,
+                    back: output_back,
+                    len: output_len,
+                    _boo: PhantomData,
+                }
+            }
+        } else {
+            // 如果当前光标为None，replace 空链表，返回原来的链表
+            std::mem::replace(self.list, LinkedList::new())
+        }
+    }
+
+    // 以当前光标作为前链表的back，后一个节点为后链表的front，返回后链表
+    pub fn split_after(&mut self) -> LinkedList<T> {
+        
+        if let Some(cur) = self.cur {
+            unsafe {
+
+                // 保存当前光标状态
+                let old_len = self.list.len;
+                let old_idx = self.index.unwrap();
+                let next = (*cur.as_ptr()).back;
+
+                let new_len = old_idx + 1;
+                let new_front = self.list.front;
+                let new_back = self.cur;
+                let new_idx = Some(old_len - 1);
+
+                let output_len = old_len - new_len;
+                let output_front = next;
+                let output_back = self.list.back;
+
+                if let Some(next) = next {
+                    (*cur.as_ptr()).back = None;
+                    (*next.as_ptr()).front = None;
+                }
+
+                self.list.len = new_len;
+                self.list.front = new_front;
+                self.list.back = new_back;
+                self.index = new_idx;
+
+                LinkedList {
+                    front: output_front,
+                    back: output_back,
+                    len: output_len,
+                    _boo: PhantomData,
+                }
+            }
+        } else {
+            // 如果当前光标为None，replace 空链表，返回原来的链表
+            std::mem::replace(self.list, LinkedList::new())
+        }
+    }
+
 }
 
 impl<T> Drop for LinkedList<T> {
