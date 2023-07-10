@@ -601,6 +601,36 @@ impl<'a, T> CursorMut<'a, T>  {
         }
     }
 
+    pub fn splice_before(&mut self, mut input: LinkedList<T>) {
+        unsafe {
+            if input.is_empty() {
+                // 如果输入链表尾空，不做任何事情
+            } else if let Some(cur) = self.cur {
+                // 如果当前光标在front，直接接入链表
+                if let Some(0) = self.index {
+                    (*cur.as_ptr()).front = input.back.take();
+                    (*input.back.unwrap().as_ptr()).back = Some(cur);
+                    self.list.front = input.front.take();
+                } else {
+
+                    let prev = (*cur.as_ptr()).front.unwrap();
+                    let in_front = input.front.take().unwrap();
+                    let in_back = input.back.take().unwrap();
+
+                    (*prev.as_ptr()).back = Some(in_front);
+                    (*in_front.as_ptr()).front = Some(cur);
+                    (*cur.as_ptr()).front = Some(in_back);
+                    (*in_back.as_ptr()).back = Some(cur);
+
+                    *self.index.as_mut().unwrap() += input.len;
+
+                    self.list.len += input.len;
+                    input.len = 0;
+                }
+            }
+        }
+    }
+
 }
 
 impl<T> Drop for LinkedList<T> {
