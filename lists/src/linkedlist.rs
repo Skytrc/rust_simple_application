@@ -606,28 +606,50 @@ impl<'a, T> CursorMut<'a, T>  {
             if input.is_empty() {
                 // 如果输入链表尾空，不做任何事情
             } else if let Some(cur) = self.cur {
-                // 如果当前光标在front，直接接入链表
-                if let Some(0) = self.index {
+
+                let in_front = input.front.take().unwrap();
+                let in_back = input.back.take().unwrap();
+
+                // 如果cursor前有节点（普通情况）
+                if let Some(prev) = (*cur.as_ptr()).front {
+                    // 1.修改cursor前个节点的back -> 插入链表的front
+                    // 2.插入链表的front.front -> cursor的前个节点
+                    // 3.cursor的前个节点 -> 插入链表的back
+                    // 4.插入链表的back.back -> cursor
+                    // 总的来说就是改变四个节点的前后对应关系
+                    (*prev.as_ptr()).back = Some(in_front);
+                    (*in_front.as_ptr()).front = Some(prev);
+                    (*cur.as_ptr()).front = Some(in_back);
+                    (*in_back.as_ptr()).back = Some(cur);
+                } else {
+                    // （特殊情况）cursor指向原链表的front
+                    // 1.cursor.front -> 插入链表的back
+                    // 2.插入链表的back.back -> cur
+                    // 3.整个链表的front -> 插入链表的front
                     (*cur.as_ptr()).front = input.back.take();
                     (*input.back.unwrap().as_ptr()).back = Some(cur);
                     self.list.front = input.front.take();
-                } else {
-
-                    let prev = (*cur.as_ptr()).front.unwrap();
-                    let in_front = input.front.take().unwrap();
-                    let in_back = input.back.take().unwrap();
-
-                    (*prev.as_ptr()).back = Some(in_front);
-                    (*in_front.as_ptr()).front = Some(cur);
-                    (*cur.as_ptr()).front = Some(in_back);
-                    (*in_back.as_ptr()).back = Some(cur);
-
-                    *self.index.as_mut().unwrap() += input.len;
-
-                    self.list.len += input.len;
-                    input.len = 0;
                 }
+
+                // 修改index
+                *self.index.as_mut().unwrap() += input.len;
+            } else if let Some(back) = self.list.back {
+                let in_front = input.front.take().unwrap();
+                let in_back = input.back.take().unwrap();
+
+                // 如果cursor刚好在原链表的最后一个节点，直接接入链表
+                // 简单改变两个节点的前后对应关系和原链表的长度
+                (*back.as_ptr()).back = Some(in_front);
+                (*in_front.as_ptr()).front = Some(back);
+                self.list.back = Some(in_back);
+            } else {
+                // 原链表为空，直接替换
+                std::mem::swap(self.list, &mut input);
             }
+
+            // 修改原链表长度
+            self.list.len += input.len;
+            input.len = 0;
         }
     }
 
